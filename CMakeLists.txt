@@ -4,22 +4,38 @@ project(CubeWorldModLauncher)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Configurar para Windows
-set(CMAKE_SYSTEM_NAME Windows)
+# Archivos fuente
+set(SOURCES
+    main.cpp
+    Process.cpp
+)
 
-# Launcher Principal
-add_executable(CubeWorldModLauncher main.cpp)
-target_link_libraries(CubeWorldModLauncher shlwapi)
+set(HEADERS
+    Process.h
+)
 
-# Configurar opciones de compilación
+# Crear ejecutable CONSOLE (no WIN32)
+add_executable(CubeWorldModLauncher ${SOURCES} ${HEADERS})
+
+# Librerías
+target_link_libraries(CubeWorldModLauncher 
+    shlwapi
+    user32
+    kernel32
+)
+
+# Opciones de compilación para MSVC
 if(MSVC)
-    target_compile_options(CubeWorldModLauncher PRIVATE /W4 /WX)
+    target_compile_options(CubeWorldModLauncher PRIVATE /W4)
+    target_compile_definitions(CubeWorldModLauncher PRIVATE _CRT_SECURE_NO_WARNINGS)
+    
     set_target_properties(CubeWorldModLauncher PROPERTIES
         MSVC_RUNTIME_LIBRARY "MultiThreaded"
+        SUBSYSTEM "CONSOLE"
     )
 endif()
 
-# Configurar salida
+# Salida
 set_target_properties(CubeWorldModLauncher PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
