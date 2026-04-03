@@ -3,19 +3,14 @@
 #include <vector>
 #include <string>
 #include <shlwapi.h>
+#include <cstdio>
+#include <cstdlib>
+#include "main.h"
+#include "Process.h"
 
 #pragma comment(lib, "shlwapi.lib")
 
 using namespace std;
-
-// Configuración para Cube World Alpha 0.1.1
-const char CUBE_EXECUTABLE[] = "Cube.exe";
-const char MODLOADER_DLL[] = "CallbackManager.dll";
-const char MOD_DIRECTORY[] = "Mods";
-const char MOD_SEARCH_PATTERN[] = "Mods\\*.dll";
-
-// File size validation for Cube World Alpha 0.1.1
-const long CUBE_WORLD_SIZE = 3885568;
 
 bool FileExists(const char* szPath)
 {
@@ -32,16 +27,16 @@ bool DirectoryExists(const char* szPath)
 void ShowError(const char* title, const char* message)
 {
     MessageBoxA(NULL, message, title, MB_OK | MB_ICONERROR);
-    printf("ERROR: %s\n", message);
+    fprintf(stderr, "ERROR: %s - %s\n", title, message);
 }
 
 void ShowInfo(const char* title, const char* message)
 {
     MessageBoxA(NULL, message, title, MB_OK | MB_ICONINFORMATION);
-    printf("%s\n", message);
+    printf("%s: %s\n", title, message);
 }
 
-int Bail(int result, const char* message = nullptr)
+int Bail(int result, const char* message)
 {
     if (message) {
         printf("Press enter to exit.\n");
@@ -81,13 +76,14 @@ bool ValidateCubeExecutable(const char* exePath)
 
 int main()
 {
+    // Configurar idioma del sistema
     setlocale(LC_ALL, "es_ES.UTF-8");
     
     printf("====================================\n");
-    printf("Cube World Mod Launcher - Alpha\n");
+    printf("Cube World Mod Launcher - Alpha 0.1.1\n");
     printf("====================================\n\n");
 
-    // Verificar Cube.exe
+    // [1/5] Verificar Cube.exe
     printf("[1/5] Verificando Cube.exe...\n");
     if (!FileExists(CUBE_EXECUTABLE)) {
         ShowError("Not Found", "Cube.exe no encontrado.\nAsegúrate de estar en la carpeta correcta.");
@@ -99,7 +95,7 @@ int main()
     }
     printf("[✓] Cube.exe validado correctamente.\n\n");
 
-    // Verificar CallbackManager.dll
+    // [2/5] Verificar CallbackManager.dll
     printf("[2/5] Verificando CallbackManager.dll...\n");
     if (!FileExists(MODLOADER_DLL)) {
         ShowError("Not Found", "CallbackManager.dll no encontrado.\nEste archivo es obligatorio.");
@@ -107,7 +103,7 @@ int main()
     }
     printf("[✓] CallbackManager.dll encontrado.\n\n");
 
-    // Crear carpeta de mods si no existe
+    // [3/5] Crear carpeta de mods si no existe
     printf("[3/5] Preparando carpeta de mods...\n");
     if (!DirectoryExists(MOD_DIRECTORY)) {
         if (CreateDirectoryA(MOD_DIRECTORY, NULL)) {
@@ -120,25 +116,12 @@ int main()
         printf("[✓] Carpeta 'Mods' encontrada.\n\n");
     }
 
-    // Crear proceso suspendido
+    // [4/5] Crear proceso suspendido
     printf("[4/5] Iniciando Cube.exe...\n");
-    STARTUPINFOA si;
-    PROCESS_INFORMATION pi;
-    ZeroMemory(&si, sizeof(si));
-    si.cb = sizeof(si);
-    ZeroMemory(&pi, sizeof(pi));
-
-    if (!CreateProcessA(NULL,
-                        (LPSTR)CUBE_EXECUTABLE,
-                        NULL,
-                        NULL,
-                        FALSE,
-                        CREATE_SUSPENDED,
-                        NULL,
-                        NULL,
-                        &si,
-                        &pi))
-    {
+    
+    Process gameProcess(CUBE_EXECUTABLE);
+    
+    if (!gameProcess.Create()) {
         char msg[256];
         sprintf_s(msg, sizeof(msg), "Error al crear el proceso: 0x%lX", GetLastError());
         ShowError("Process Error", msg);
@@ -151,8 +134,8 @@ int main()
     // Agregar CallbackManager (obligatorio)
     modDLLs.push_back(string(MODLOADER_DLL));
 
-    // Buscar mods en la carpeta
-    printf("[5/5] Buscando mods...\n");
+    // [5/5] Buscar mods en la carpeta
+    printf("[5/5] Buscando mods compatibles con Alpha 0.1.1...\n");
     HANDLE hFind;
     WIN32_FIND_DATAA data;
 
@@ -179,51 +162,26 @@ int main()
 
     // Inyectar DLLs
     printf("Inyectando DLLs en proceso...\n\n");
-    vector<HANDLE> threads;
     int successCount = 0;
 
-    for (const string& S_DLLName : modDLLs) {
-        printf("  Cargando: %s\n", S_DLLName.c_str());
-
-        LPVOID load_library = (LPVOID)GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryA");
-        if (!load_library) {
-            printf("    ERROR: No se pudo obtener LoadLibraryA\n");
-            continue;
-        }
-
-        size_t dllNameLen = S_DLLName.length() + 1;
-        LPVOID remote_string = VirtualAllocEx(pi.hProcess, NULL, dllNameLen, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-        if (!remote_string) {
-            printf("    ERROR: No se pudo asignar memoria remota\n");
-            continue;
-        }
-
-        if (!WriteProcessMemory(pi.hProcess, remote_string, S_DLLName.c_str(), dllNameLen, NULL)) {
-            printf("    ERROR: No se pudo escribir en memoria remota\n");
-            VirtualFreeEx(pi.hProcess, remote_string, 0, MEM_RELEASE);
-            continue;
-        }
-
-        HANDLE thread = CreateRemoteThread(pi.hProcess, NULL, NULL, (LPTHREAD_START_ROUTINE)load_library, remote_string, CREATE_SUSPENDED, NULL);
-        if (thread) {
-            threads.push_back(thread);
-            ResumeThread(thread);
+    for (const string& dllName : modDLLs) {
+        printf("  Cargando: %s\n", dllName.c_str());
+        
+        if (gameProcess.InjectDLL(dllName)) {
             successCount++;
             printf("    [✓] Inyectado\n");
         } else {
-            printf("    ERROR: No se pudo crear el thread remoto\n");
-            VirtualFreeEx(pi.hProcess, remote_string, 0, MEM_RELEASE);
+            printf("    [✗] Error al inyectar\n");
         }
     }
 
     printf("\n");
 
     // Pequeña pausa para que la inyección se estabilice
-    // Esto previene condiciones de carrera (race conditions)
     Sleep(250);
 
     // Reanudar proceso
-    ResumeThread(pi.hThread);
+    gameProcess.Resume();
     
     printf("====================================\n");
     printf("DLLs inyectados: %d/%zu\n", successCount, modDLLs.size());
@@ -231,15 +189,7 @@ int main()
     printf("Esperando a que Cube World cierre...\n\n");
 
     // Esperar a que el proceso termine
-    WaitForSingleObject(pi.hProcess, INFINITE);
-
-    // Limpiar recursos
-    for (HANDLE thread : threads) {
-        CloseHandle(thread);
-    }
-    
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
+    gameProcess.Wait();
 
     printf("\nCube World ha sido cerrado.\n");
     printf("Presiona enter para salir.\n");
