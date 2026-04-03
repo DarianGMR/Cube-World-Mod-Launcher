@@ -1,6 +1,7 @@
 #include "Process.h"
 #include <cstring>
 #include <windows.h>
+#include <cstdio>
 
 Process::Process(const std::string& executablePath)
     : executablePath(executablePath)
@@ -12,13 +13,7 @@ Process::Process(const std::string& executablePath)
 
 Process::~Process()
 {
-    // Limpiar si es necesario
-    if (pi.hProcess != NULL) {
-        CloseHandle(pi.hProcess);
-    }
-    if (pi.hThread != NULL) {
-        CloseHandle(pi.hThread);
-    }
+    Cleanup();
 }
 
 bool Process::Create()
@@ -40,6 +35,7 @@ bool Process::Create()
 bool Process::InjectDLL(const std::string& dllName)
 {
     if (pi.hProcess == NULL) {
+        printf("ERROR: Process handle is NULL\n");
         return false;
     }
 
@@ -50,6 +46,7 @@ bool Process::InjectDLL(const std::string& dllName)
     );
     
     if (!load_library) {
+        printf("ERROR: Could not get LoadLibraryA address\n");
         return false;
     }
 
@@ -64,6 +61,7 @@ bool Process::InjectDLL(const std::string& dllName)
     );
     
     if (!remote_string) {
+        printf("ERROR: Could not allocate remote memory\n");
         return false;
     }
 
@@ -75,6 +73,7 @@ bool Process::InjectDLL(const std::string& dllName)
         dllNameLen,
         NULL
     )) {
+        printf("ERROR: Could not write to remote memory\n");
         VirtualFreeEx(pi.hProcess, remote_string, 0, MEM_RELEASE);
         return false;
     }
@@ -91,13 +90,14 @@ bool Process::InjectDLL(const std::string& dllName)
     );
     
     if (!thread) {
+        printf("ERROR: Could not create remote thread\n");
         VirtualFreeEx(pi.hProcess, remote_string, 0, MEM_RELEASE);
         return false;
     }
 
     // Reanudar el thread
     ResumeThread(thread);
-    CloseHandle(thread);
+    injectedThreads.push_back(thread);
 
     return true;
 }
@@ -106,6 +106,13 @@ void Process::Resume()
 {
     if (pi.hThread != NULL) {
         ResumeThread(pi.hThread);
+    }
+}
+
+void Process::Wait()
+{
+    if (pi.hProcess != NULL) {
+        WaitForSingleObject(pi.hProcess, INFINITE);
     }
 }
 
@@ -121,4 +128,23 @@ void Process::WriteJMP(BYTE* location, BYTE* newFunction)
     *((DWORD*)(location + 1)) = offset;
     
     VirtualProtect(location, 5, dwOldProtection, &dwOldProtection);
+}
+
+void Process::Cleanup()
+{
+    // Cerrar todos los threads inyectados
+    for (HANDLE thread : injectedThreads) {
+        if (thread != NULL) {
+            CloseHandle(thread);
+        }
+    }
+    injectedThreads.clear();
+    
+    // Cerrar handles del proceso
+    if (pi.hProcess != NULL) {
+        CloseHandle(pi.hProcess);
+    }
+    if (pi.hThread != NULL) {
+        CloseHandle(pi.hThread);
+    }
 }
