@@ -118,7 +118,7 @@ std::vector<std::string> LoadModsFromDirectory() {
     std::vector<std::string> mods;
     
     if (!DirectoryExists(MODS_DIRECTORY)) {
-        LogWarning("Directorio de Mods no encontrado. Se creara automáticamente.");
+        LogWarning("Directorio de Mods no encontrado. Se creará automáticamente.");
         CreateModsDirectory();
         return mods;
     }
@@ -174,7 +174,7 @@ bool ValidateCubeExecutable(const char* exePath) {
             "Tamaño actual: %ld bytes\n\n"
             "Por favor, usa Cube World Alpha 0.1.1 exacta",
             EXPECTED_SIZE, actualSize);
-        ShowWarning("Validación de Version", msg);
+        ShowWarning("Validación de Versión", msg);
     }
 
     LogMessage("Cube.exe validado correctamente");
@@ -201,8 +201,8 @@ bool GetOrExtractCallbackManager() {
     LogMessage("CallbackManager.dll no encontrado, intentando extraer desde recursos");
     
     if (ResourceManager::ExtractResourceByName("CALLBACKMANAGER_DLL", "BINARY", MODLOADER_DLL)) {
-        LogMessage("CallbackManager.dll extraido exitosamente desde recursos");
-        printf("CallbackManager.dll extraido desde recursos internos\n");
+        LogMessage("CallbackManager.dll extraído exitosamente desde recursos");
+        printf("CallbackManager.dll extraído desde recursos internos\n");
         return true;
     }
     
@@ -212,10 +212,21 @@ bool GetOrExtractCallbackManager() {
 }
 
 // ============================================
+// FUNCIÓN - ESTABLECER TÍTULO DE LA CONSOLA
+// ============================================
+
+void SetConsoleTitle() {
+    SetConsoleTitleA("CubeLauncherMod - By DarianGMR");
+}
+
+// ============================================
 // FUNCIÓN PRINCIPAL
 // ============================================
 
 int main(int argc, char** argv) {
+    // Establecer título de la consola
+    SetConsoleTitle();
+    
     DeleteFileA(LOG_FILE);
     
     LogMessage("========================================");
@@ -237,7 +248,7 @@ int main(int argc, char** argv) {
     // [1/5] Validar Cube.exe
     printf("[1/5] Validando Cube.exe...\n");
     if (!ValidateCubeExecutable(cubeExe)) {
-        return Bail(1, "Cube.exe no es la version correcta (Alpha 0.1.1)");
+        return Bail(1, "Cube.exe no es la versión correcta (Alpha 0.1.1)");
     }
     printf("Cube.exe validado correctamente\n\n");
 
@@ -259,7 +270,7 @@ int main(int argc, char** argv) {
     std::vector<std::string> mods = LoadModsFromDirectory();
     printf("\n");
 
-    // [4/5] Crear proceso
+    // Crear proceso
     LogMessage("Creando proceso de Cube.exe en estado suspendido");
     
     Process process(cubeExe);
@@ -300,18 +311,19 @@ int main(int argc, char** argv) {
     Sleep(1000);
 
     // [5/5] Reanudar proceso
-    printf("[5/5] Iniciando CubeWorld...\n\n");
+    printf("[5/5] Iniciando Cubeworld...\n\n");
     process.Resume();
 
     LogMessage("========================================");
     LogMessage("Cube World iniciado correctamente");
     LogMessage("========================================");
 
-    process.Wait();
+    printf("Cubeworld iniciado exitosamente\n");
+    printf("El launcher se cerrara ahora...\n");
+    
+    LogMessage("Launcher finalizado - Cubeworld iniciado");
 
-    LogMessage("========================================");
-    LogMessage("Cube World finalizado");
-    LogMessage("========================================");
+    Sleep(2500); // Dar 2.5 segundos para que el usuario vea el mensaje
 
     return 0;
 }
