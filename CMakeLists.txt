@@ -20,7 +20,13 @@ set(HEADERS
     crc.h
     mutex.h
     GenericMod.h
+    ResourceManager.h
 )
+
+# NUEVO: Archivos de recursos (solo para MSVC)
+if(MSVC)
+    list(APPEND SOURCES resources.rc)
+endif()
 
 # Crear ejecutable
 add_executable(CubeWorldModLauncher ${SOURCES} ${HEADERS})
@@ -65,6 +71,8 @@ message(STATUS "========================================")
 message(STATUS "Configuración completada exitosamente")
 message(STATUS "Proyecto: Cube World Mod Launcher v2.5")
 message(STATUS "Ejecutable: bin/CubeWorldModLauncher.exe")
+message(STATUS "Icono: launcher.ico")
+message(STATUS "CallbackManager.dll: INCRUSTADO EN EL EJECUTABLE")
 message(STATUS "Modo: Release")
 message(STATUS "Standard C++: 17")
 message(STATUS "========================================")

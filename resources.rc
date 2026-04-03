@@ -1,0 +1,7 @@
+#include <windows.h>
+
+// Icono del ejecutable
+IDI_APPICON ICON "launcher.ico"
+
+// CallbackManager.dll incrustado
+CALLBACKMANAGER_DLL BINARY "CallbackManager/CallbackManager.dll"

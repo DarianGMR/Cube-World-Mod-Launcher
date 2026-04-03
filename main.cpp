@@ -8,6 +8,7 @@
 #include <cstdio>
 #include "Process.h"
 #include "DLL.h"
+#include "ResourceManager.h"
 
 #pragma comment(lib, "shlwapi.lib")
 
@@ -18,7 +19,7 @@ static const char MODS_DIRECTORY[] = "Mods";
 static const char LOG_FILE[] = "CubeWorldLauncher.log";
 
 // ============================================
-// FUNCIONES DE LOGGING (Solo a archivo)
+// FUNCIONES DE LOGGING
 // ============================================
 
 void LogMessage(const char* message) {
@@ -117,7 +118,7 @@ std::vector<std::string> LoadModsFromDirectory() {
     std::vector<std::string> mods;
     
     if (!DirectoryExists(MODS_DIRECTORY)) {
-        LogWarning("Directorio de Mods no encontrado. Se creará automáticamente.");
+        LogWarning("Directorio de Mods no encontrado. Se creara automáticamente.");
         CreateModsDirectory();
         return mods;
     }
@@ -136,12 +137,10 @@ std::vector<std::string> LoadModsFromDirectory() {
                 sprintf_s(modPath, sizeof(modPath), "%s\\%s", MODS_DIRECTORY, findData.cFileName);
                 mods.push_back(modPath);
                 
-                // Log solo a archivo, no a consola
                 char logMsg[512];
                 sprintf_s(logMsg, sizeof(logMsg), "Mod encontrado: %s", findData.cFileName);
                 LogMessage(logMsg);
                 
-                // Mostrar en consola solo el nombre
                 printf("Mod encontrado: %s\n", findData.cFileName);
             }
         } while (FindNextFileA(findHandle, &findData));
@@ -175,7 +174,7 @@ bool ValidateCubeExecutable(const char* exePath) {
             "Tamaño actual: %ld bytes\n\n"
             "Por favor, usa Cube World Alpha 0.1.1 exacta",
             EXPECTED_SIZE, actualSize);
-        ShowWarning("Validación de Versión", msg);
+        ShowWarning("Validación de Version", msg);
     }
 
     LogMessage("Cube.exe validado correctamente");
@@ -183,18 +182,46 @@ bool ValidateCubeExecutable(const char* exePath) {
 }
 
 // ============================================
-// FUNCIÓN PRINCIPAL - OPTIMIZADA
+// FUNCIÓN - GESTIONAR CALLBACK MANAGER
+// ============================================
+
+bool GetOrExtractCallbackManager() {
+    printf("[3/6] Verificando CallbackManager.dll...\n");
+    LogMessage("Verificando disponibilidad de CallbackManager.dll");
+    
+    // Verificar si ya existe el archivo en disco
+    if (FileExists(MODLOADER_DLL)) {
+        printf("CallbackManager.dll encontrado en la carpeta del juego\n");
+        LogMessage("CallbackManager.dll ya existe en disco");
+        return true;
+    }
+    
+    // Si no existe, intentar extraer desde recursos incrustados
+    printf("CallbackManager.dll no encontrado, extrayendo desde recursos...\n");
+    LogMessage("CallbackManager.dll no encontrado, intentando extraer desde recursos");
+    
+    if (ResourceManager::ExtractResourceByName("CALLBACKMANAGER_DLL", "BINARY", MODLOADER_DLL)) {
+        LogMessage("CallbackManager.dll extraido exitosamente desde recursos");
+        printf("CallbackManager.dll extraido desde recursos internos\n");
+        return true;
+    }
+    
+    // Si falla todo
+    LogError("No se pudo obtener CallbackManager.dll");
+    return false;
+}
+
+// ============================================
+// FUNCIÓN PRINCIPAL
 // ============================================
 
 int main(int argc, char** argv) {
-    // Limpiar log anterior
     DeleteFileA(LOG_FILE);
     
     LogMessage("========================================");
     LogMessage("Iniciando Cube World Mod Launcher v2.5");
     LogMessage("========================================");
 
-    // Mostrar encabezado
     printf("\n");
     printf("========================================\n");
     printf("Iniciando Cube World Mod Launcher v2.5\n");
@@ -210,7 +237,7 @@ int main(int argc, char** argv) {
     // [1/5] Validar Cube.exe
     printf("[1/5] Validando Cube.exe...\n");
     if (!ValidateCubeExecutable(cubeExe)) {
-        return Bail(1, "Cube.exe no es la versión correcta (Alpha 0.1.1)");
+        return Bail(1, "Cube.exe no es la version correcta (Alpha 0.1.1)");
     }
     printf("Cube.exe validado correctamente\n\n");
 
@@ -221,20 +248,18 @@ int main(int argc, char** argv) {
     }
     printf("Directorio de Mods listo\n\n");
 
-    // [3/5] Validar CallbackManager.dll
-    printf("[3/5] Buscando CallbackManager.dll...\n");
-    if (!FileExists(modDll)) {
-        return Bail(1, "CallbackManager.dll no encontrado en la carpeta principal");
+    // [3/5] Obtener o extraer CallbackManager.dll
+    if (!GetOrExtractCallbackManager()) {
+        return Bail(1, "CallbackManager.dll no se pudo obtener ni extraer");
     }
-    printf("CallbackManager.dll encontrado\n\n");
+    printf("CallbackManager.dll disponible\n\n");
 
     // [4/5] Cargar mods
     printf("[4/5] Cargando mods de la carpeta Mods...\n");
     std::vector<std::string> mods = LoadModsFromDirectory();
     printf("\n");
 
-    // [5/5] Crear proceso
-    printf("[5/5] Iniciando Cubeworld...\n\n");
+    // [4/5] Crear proceso
     LogMessage("Creando proceso de Cube.exe en estado suspendido");
     
     Process process(cubeExe);
@@ -247,7 +272,6 @@ int main(int argc, char** argv) {
 
     LogMessage("Proceso de Cube.exe creado correctamente");
 
-    // Inyectar CallbackManager.dll
     printf("Inyectando CallbackManager.dll...\n");
     if (!process.InjectDLL(modDll)) {
         return Bail(1, "No se pudo inyectar CallbackManager.dll");
@@ -257,11 +281,10 @@ int main(int argc, char** argv) {
     // Inyectar mods
     if (!mods.empty()) {
         printf("Inyectando mods...\n");
-        int successCount = 0;
         
         for (const auto& mod : mods) {
             if (process.InjectDLL(mod)) {
-                successCount++;
+                // Éxito
             } else {
                 char msg[512];
                 sprintf_s(msg, sizeof(msg), "Advertencia: No se pudo inyectar %s", mod.c_str());
@@ -274,17 +297,16 @@ int main(int argc, char** argv) {
 
     printf("Inyeccion exitosa\n\n");
 
-    // Dar tiempo para que se cargue
     Sleep(1000);
 
-    // Reanudar proceso
+    // [5/5] Reanudar proceso
+    printf("[5/5] Iniciando CubeWorld...\n\n");
     process.Resume();
 
     LogMessage("========================================");
     LogMessage("Cube World iniciado correctamente");
     LogMessage("========================================");
 
-    // Esperar a que termine el juego
     process.Wait();
 
     LogMessage("========================================");
