@@ -8,29 +8,28 @@
 class Process
 {
 public:
-    // Constructor
+    // Constructor y destructor
     Process(const std::string& executablePath);
-    
-    // Destructor
     virtual ~Process();
 
     // Crear proceso suspendido
     bool Create();
     
-    // Inyectar una DLL en el proceso
+    // Inyectar una DLL en el proceso remoto
     bool InjectDLL(const std::string& dllName);
     
-    // Reanudar proceso principal
+    // Reanudar el proceso principal
     void Resume();
     
     // Esperar a que el proceso termine
     void Wait();
     
-    // Obtener handle del proceso
+    // Obtener handles del proceso
     HANDLE GetProcessHandle() const { return pi.hProcess; }
-    
-    // Obtener handle del thread principal
     HANDLE GetThreadHandle() const { return pi.hThread; }
+    
+    // Verificar si el proceso está corriendo
+    bool IsRunning() const;
 
 private:
     std::string executablePath;
@@ -38,10 +37,7 @@ private:
     PROCESS_INFORMATION pi;
     std::vector<HANDLE> injectedThreads;
 
-    // Función auxiliar para escribir un JMP
     void WriteJMP(BYTE* location, BYTE* newFunction);
-    
-    // Limpiar recursos
     void Cleanup();
 };
 
