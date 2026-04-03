@@ -1,49 +1,46 @@
 # Cube World Mod Launcher - Alpha 0.1.1
-## Versión 3.0 Profesional
+## Versión Mejorada v2.0
 
-Launcher profesional y optimizado para inyectar y gestionar mods en **Cube World Alpha 0.1.1**.
+Launcher profesional para inyectar y gestionar mods en **Cube World Alpha 0.1.1**.
 
-### 🎯 Características v3.0
+### 🎯 Características Principales
 
-- ✅ Validación automática y rigurosa de versión (Alpha 0.1.1 únicamente)
-- ✅ Sistema de callbacks avanzado para máxima compatibilidad con mods
-- ✅ Gestión segura y robusta de inyección de DLLs
-- ✅ Logging completo y detallado de todas las operaciones
-- ✅ Soporte para múltiples mods con manejo de prioridades
-- ✅ Interfaz de usuario mejorada con colores y mensajes claros
-- ✅ Sincronización de threads con mutex nativo
-- ✅ Manejo avanzado de errores y recuperación
-- ✅ **Compilación sin warnings - Código 100% limpio**
+- ✅ Validación automática de versión (Cube World Alpha 0.1.1)
+- ✅ Sistema de callbacks mejorado para mods
+- ✅ Gestión segura de inyección de DLLs
+- ✅ Logging completo de operaciones
+- ✅ Soporte para múltiples mods simultáneamente
+- ✅ Interfaz de usuario clara y en español
+- ✅ Sincronización de threads con mutex
 
 ### 📋 Requisitos
 
 - **Sistema Operativo:** Windows 7 o superior (32-bit o 64-bit)
-- **Cube World Alpha 0.1.1** (versión exacta - 3,885,568 bytes)
+- **Cube World Alpha 0.1.1** (versión exacta)
 - Visual Studio Build Tools 2019 o superior
 - CMake 3.10 o superior
 
-### 📦 Instalación Rápida
+### 📦 Instalación
 
-1. **Descargar Cube World Alpha 0.1.1:**
-   ```
-   https://github.com/ChrisMiuchiz/Cube-World-Cracker
-   ```
+1. **Descarga Cube World Alpha 0.1.1:**
+   - Usa https://github.com/ChrisMiuchiz/Cube-World-Cracker para descargar
 
-2. **Copiar archivos:**
-   - `CubeWorldModLauncher.exe` → Carpeta de Cube World
-   - `CallbackManager.dll` → Carpeta de Cube World
-   - `Cube.exe` → Verificar tamaño: 3,885,568 bytes
+2. **Coloca el launcher:**
+   - Descarga `CubeWorldModLauncher.exe`
+   - Colócalo en la misma carpeta que `Cube.exe`
 
-3. **Crear carpeta:**
-   - `Mods/` → En la misma carpeta que Cube.exe
+3. **Requiere estos archivos:**
+   - `Cube.exe` (Cube World Alpha 0.1.1)
+   - `CallbackManager.dll` (mod loader)
+   - `CubeWorldModLauncher.exe` (este launcher)
 
 ### 📂 Estructura de Carpetas
 
 ```
 Cube World Alpha/
-├── Cube.exe (3,885,568 bytes)
-├── CubeWorldModLauncher.exe (ESTE LAUNCHER)
-├── CallbackManager.dll (OBLIGATORIO)
+├── Cube.exe
+├── CubeWorldModLauncher.exe
+├── CallbackManager.dll
 └── Mods/
     ├── mod1.dll
     ├── mod2.dll
@@ -52,83 +49,55 @@ Cube World Alpha/
 
 ### 🚀 Cómo Usar
 
-```bash
-# Opción 1: Ejecutar directamente
-CubeWorldModLauncher.exe
+1. **Ejecuta el launcher:**
+   ```
+   CubeWorldModLauncher.exe
+   ```
 
-# Opción 2: Con argumento personalizado
-CubeWorldModLauncher.exe "C:\Ruta\A\Cube.exe"
-```
+2. El launcher automáticamente:
+   - Valida que Cube.exe sea la versión correcta
+   - Crea la carpeta `Mods` si no existe
+   - Inicia Cube.exe en modo suspendido
+   - Inyecta `CallbackManager.dll` y todos los mods
+   - Reanuda el proceso
 
-**El launcher automáticamente:**
-1. ✓ Valida que Cube.exe sea Alpha 0.1.1
-2. ✓ Crea la carpeta Mods si no existe
-3. ✓ Inicia Cube.exe suspendido
-4. ✓ Inyecta CallbackManager.dll y todos los mods
-5. ✓ Reanuda el proceso
-6. ✓ Espera a que el juego se cierre
+3. **Instala mods:**
+   - Coloca archivos `.dll` en la carpeta `Mods`
+   - Reinicia el launcher
 
 ### 📝 Archivo de Log
 
-Automáticamente genera `CubeWorldLauncher-Alpha.log` con:
-- Timestamp de cada operación
-- Mods detectados y cargados
-- Errores y advertencias
-- Estado de inyección
+El launcher crea automáticamente `CubeWorldLauncher.log` con:
+- Hora y fecha de cada operación
+- Mods cargados
+- Errores o advertencias
 
-**Ejemplo:**
-```
-[14:23:15] ===== INICIANDO LAUNCHER ALPHA 0.1.1 =====
-[14:23:15] [PASO 1/7] Verificando Cube.exe
-[14:23:15] Cube.exe validado correctamente (Alpha 0.1.1 - 3885568 bytes)
-[14:23:16] Mod encontrado: MyMod.dll
-```
-
-### 🔧 Compilación desde Código Fuente
+### 🛠️ Compilación desde Código Fuente
 
 ```bash
-# 1. Crear directorio de build
+# Crear directorio de build
 mkdir build
 cd build
 
-# 2. Configurar con CMake
+# Configurar con CMake
 cmake -G "Visual Studio 16 2019" -A Win32 ..
 
-# 3. Compilar
+# Compilar
 cmake --build . --config Release
 
-# 4. Ejecutable en:
-# build/bin/Release/CubeWorldModLauncher.exe
+# Ejecutable en: build/bin/CubeWorldModLauncher.exe
 ```
 
 ### ⚙️ Para Desarrolladores de Mods
 
-Los mods deben implementar `GenericMod`:
+Los mods deben implementar la interface `GenericMod` y exportar:
 
 ```cpp
-#include "GenericMod.h"
-
-class MiMod : public GenericMod {
-public:
-    void Initialize() override {
-        // Inicialización del mod
-    }
-    
-    void OnGameTick(void* game) override {
-        // Lógica por tick
-    }
-    
-    int OnChat(void* msg) override {
-        // Procesar chat
-        return 0;  // 0 = permitir, 1 = cancelar
-    }
-};
-
 extern "C" {
     int ModMajorVersion() { return 1; }
     int ModMinorVersion() { return 0; }
     void ModPreInitialize() {}
-    GenericMod* MakeMod() { return new MiMod(); }
+    GenericMod* MakeMod() { return new TuModClass(); }
 }
 ```
 
@@ -136,39 +105,26 @@ extern "C" {
 
 | Problema | Solución |
 |----------|----------|
-| "Cube.exe no encontrado" | Coloca el launcher en la carpeta de Cube World |
-| "Versión incorrecta" | Usa exactamente Cube World Alpha 0.1.1 (3,885,568 bytes) |
-| "CallbackManager.dll no encontrado" | Descárgalo y colócalo en la raíz con Cube.exe |
-| Los mods no cargan | Coloca los .dll en la carpeta `Mods` |
-| Error de permisos | Ejecuta como administrador |
-| Revisar logs | Abre `CubeWorldLauncher-Alpha.log` |
+| "Cube.exe no encontrado" | Coloca el launcher en la misma carpeta que Cube.exe |
+| "Versión incorrecta" | Usa Cube World Alpha 0.1.1 exacta |
+| "CallbackManager.dll no encontrado" | Asegúrate de tener el archivo en la raíz |
+| Los mods no cargan | Coloca los DLLs en la carpeta `Mods` |
+| El juego se cierra sin razón | Revisa el archivo `.log` |
 
 ### 📚 Links Útiles
 
 - [Cube World Cracker](https://github.com/ChrisMiuchiz/Cube-World-Cracker)
-- [Documentación Original](https://github.com/ChrisMiuchiz/Cube-World-Mod-Launcher)
-- [CWSDK](https://github.com/ChrisMiuchiz/CWSDK)
-
-### 📄 Notas Técnicas
-
-- **Arquitectura:** x86 (32-bit)
-- **Runtime:** MultiThreaded
-- **Lenguaje:** C++17
-- **Warnings:** 0 (Compilación limpia)
-- **Validación:** Tamaño exacto de archivo
-- **Logging:** Timestamp completo
+- [Documentación del Mod Loader Original](https://github.com/ChrisMiuchiz/Cube-World-Mod-Launcher)
 
 ### 📄 Licencia
 
-Launcher mejorado para Cube World Alpha 0.1.1. Código original basado en ChrisMiuchiz.
+Este proyecto es un launcher mejorado para Cube World Alpha 0.1.1.
 
-### 👨‍💻 Autor DarianGMR
+### 👨‍💻 Autor Mejorado
 
-Versión 3.0 - Actualización profesional y completa
+Actualización profesional y mejoras del sistema de callbacks.
 
 ---
 
-**Versión:** 3.0.0  
-**Target:** Cube World Alpha 0.1.1  
-**Última actualizaci��n:** 2026-04-03  
-**Estado:** ✅ Producción
+**Versión:** 2.0  
+**Última actualización:** 2026-04-03
