@@ -11,10 +11,11 @@ set(SOURCES
 )
 
 set(HEADERS
+    main.h
     Process.h
 )
 
-# Crear ejecutable CONSOLE (no WIN32)
+# Crear ejecutable CONSOLE
 add_executable(CubeWorldModLauncher ${SOURCES} ${HEADERS})
 
 # Librerías
