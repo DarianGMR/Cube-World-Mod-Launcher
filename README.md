@@ -1,5 +1,5 @@
 # Cube World Mod Launcher - Alpha 0.1.1
-## Versión Mejorada v2.0
+## Versión Mejorada v2.5
 
 Launcher profesional para inyectar y gestionar mods en **Cube World Alpha 0.1.1**.
 
@@ -126,5 +126,5 @@ Actualización profesional y mejoras del sistema de callbacks.
 
 ---
 
-**Versión:** 2.0  
+**Versión:** 2.5  
 **Última actualización:** 2026-04-03

@@ -1,328 +1,295 @@
+#include "main.h"
 #include <iostream>
 #include <windows.h>
 #include <vector>
-#include <string>
+#include <fstream>
+#include <ctime>
 #include <shlwapi.h>
 #include <cstdio>
-#include <cstdlib>
-#include <ctime>
-#include "main.h"
 #include "Process.h"
 #include "DLL.h"
-#include "crc.h"
 
 #pragma comment(lib, "shlwapi.lib")
 
-using namespace std;
-
-// Variables globales
-static FILE* logFile = nullptr;
+// Declaración de constantes
+static const char CUBE_EXECUTABLE[] = "Cube.exe";
+static const char MODLOADER_DLL[] = "CallbackManager.dll";
+static const char MODS_DIRECTORY[] = "Mods";
+static const char LOG_FILE[] = "CubeWorldLauncher.log";
 
 // ============================================
-// FUNCIÓN DE LOGGING
+// FUNCIONES DE LOGGING (Solo a archivo)
 // ============================================
-void LogMessage(const char* message)
-{
+
+void LogMessage(const char* message) {
+    std::ofstream logFile(LOG_FILE, std::ios::app);
     time_t now = time(nullptr);
     struct tm timeinfo;
     localtime_s(&timeinfo, &now);
+    char timeBuffer[100];
+    strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
     
-    char timestamp[32];
-    strftime(timestamp, sizeof(timestamp), "%H:%M:%S", &timeinfo);
+    logFile << "[" << timeBuffer << "] " << message << std::endl;
+    logFile.close();
+}
+
+void LogError(const char* message) {
+    std::ofstream logFile(LOG_FILE, std::ios::app);
+    time_t now = time(nullptr);
+    struct tm timeinfo;
+    localtime_s(&timeinfo, &now);
+    char timeBuffer[100];
+    strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
     
-    printf("[%s] %s\n", timestamp, message);
+    logFile << "[" << timeBuffer << "] [ERROR] " << message << std::endl;
+    logFile.close();
+}
+
+void LogWarning(const char* message) {
+    std::ofstream logFile(LOG_FILE, std::ios::app);
+    time_t now = time(nullptr);
+    struct tm timeinfo;
+    localtime_s(&timeinfo, &now);
+    char timeBuffer[100];
+    strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
     
-    if (logFile) {
-        fprintf(logFile, "[%s] %s\n", timestamp, message);
-        fflush(logFile);
+    logFile << "[" << timeBuffer << "] [WARNING] " << message << std::endl;
+    logFile.close();
+}
+
+void ShowError(const char* title, const char* message) {
+    MessageBoxA(NULL, message, title, MB_OK | MB_ICONERROR);
+    char logMsg[1024];
+    sprintf_s(logMsg, sizeof(logMsg), "[ERROR] %s: %s", title, message);
+    LogError(logMsg);
+}
+
+void ShowInfo(const char* title, const char* message) {
+    MessageBoxA(NULL, message, title, MB_OK | MB_ICONINFORMATION);
+    char logMsg[1024];
+    sprintf_s(logMsg, sizeof(logMsg), "[INFO] %s: %s", title, message);
+    LogMessage(logMsg);
+}
+
+void ShowWarning(const char* title, const char* message) {
+    MessageBoxA(NULL, message, title, MB_OK | MB_ICONWARNING);
+    char logMsg[1024];
+    sprintf_s(logMsg, sizeof(logMsg), "[WARNING] %s: %s", title, message);
+    LogWarning(logMsg);
+}
+
+int Bail(int result, const char* message) {
+    if (message) {
+        LogError(message);
+        ShowError("Error", message);
     }
+    printf("Presiona Enter para salir...\n");
+    std::cin.ignore();
+    return result;
 }
 
 // ============================================
 // FUNCIONES AUXILIARES
 // ============================================
 
-bool FileExists(const char* szPath)
-{
-    DWORD dwAttrib = GetFileAttributesA(szPath);
+bool FileExists(const char* fileName) {
+    DWORD dwAttrib = GetFileAttributesA(fileName);
     return (dwAttrib != INVALID_FILE_ATTRIBUTES && !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-bool DirectoryExists(const char* szPath)
-{
-    DWORD dwAttrib = GetFileAttributesA(szPath);
+bool DirectoryExists(const char* dirName) {
+    DWORD dwAttrib = GetFileAttributesA(dirName);
     return (dwAttrib != INVALID_FILE_ATTRIBUTES && (dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-void ShowError(const char* title, const char* message)
-{
-    MessageBoxA(NULL, message, title, MB_OK | MB_ICONERROR);
-    LogMessage(message);
-}
-
-void ShowInfo(const char* title, const char* message)
-{
-    MessageBoxA(NULL, message, title, MB_OK | MB_ICONINFORMATION);
-    LogMessage(message);
-}
-
-void ShowWarning(const char* title, const char* message)
-{
-    MessageBoxA(NULL, message, title, MB_OK | MB_ICONWARNING);
-    LogMessage(message);
-}
-
-int Bail(int result, const char* message)
-{
-    if (message) {
-        printf("Presiona ENTER para salir.\n");
-        cin.ignore();
+bool CreateModsDirectory() {
+    if (!DirectoryExists(MODS_DIRECTORY)) {
+        if (!CreateDirectoryA(MODS_DIRECTORY, NULL)) {
+            LogError("No se pudo crear el directorio Mods");
+            return false;
+        }
+        LogMessage("Directorio Mods creado exitosamente");
     }
-    if (logFile) {
-        fclose(logFile);
-    }
-    return result;
-}
-
-bool ValidateCubeExecutable(const char* exePath)
-{
-    FILE* file = nullptr;
-    errno_t err = fopen_s(&file, exePath, "rb");
-    
-    if (err != 0 || !file) {
-        ShowError("File Error", "No se puede leer Cube.exe.\nAsegúrate de que el archivo no esté en uso.");
-        return false;
-    }
-    
-    fseek(file, 0, SEEK_END);
-    long fileSize = ftell(file);
-    fclose(file);
-
-    // Validar tamaño exacto
-    if (fileSize != CUBE_WORLD_SIZE) {
-        char msg[512];
-        sprintf_s(msg, sizeof(msg),
-            "Cube.exe encontrado pero el tamaño es incorrecto.\n\n"
-            "Esperado: %ld bytes\n"
-            "Actual: %ld bytes\n\n"
-            "Asegúrate de tener Cube World Alpha 0.1.1\n"
-            "Descárgalo de: https://github.com/ChrisMiuchiz/Cube-World-Cracker",
-            CUBE_WORLD_SIZE, fileSize);
-        ShowError("Validación fallida", msg);
-        return false;
-    }
-
-    LogMessage("Cube.exe validado correctamente (tamaño correcto)");
     return true;
 }
 
-void PrintLoadedMods(const vector<string>& mods)
-{
-    string modsInfo = "Mods Cargados:\n===================\n";
+std::vector<std::string> LoadModsFromDirectory() {
+    std::vector<std::string> mods;
     
-    if (mods.empty()) {
-        modsInfo += "Sin mods adicionales (CallbackManager si está cargado)";
-    } else {
-        for (const auto& mod : mods) {
-            modsInfo += "• " + mod + "\n";
-        }
+    if (!DirectoryExists(MODS_DIRECTORY)) {
+        LogWarning("Directorio de Mods no encontrado. Se creará automáticamente.");
+        CreateModsDirectory();
+        return mods;
     }
+
+    WIN32_FIND_DATAA findData;
+    HANDLE findHandle;
+    char searchPath[MAX_PATH];
     
-    modsInfo += "\n===================\nTotal: " + to_string(mods.size()) + " mod(s)";
+    sprintf_s(searchPath, sizeof(searchPath), "%s\\*.dll", MODS_DIRECTORY);
     
-    ShowInfo("Estado de Mods", modsInfo.c_str());
-    LogMessage(modsInfo.c_str());
+    findHandle = FindFirstFileA(searchPath, &findData);
+    if (findHandle != INVALID_HANDLE_VALUE) {
+        do {
+            if (!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                char modPath[MAX_PATH];
+                sprintf_s(modPath, sizeof(modPath), "%s\\%s", MODS_DIRECTORY, findData.cFileName);
+                mods.push_back(modPath);
+                
+                // Log solo a archivo, no a consola
+                char logMsg[512];
+                sprintf_s(logMsg, sizeof(logMsg), "Mod encontrado: %s", findData.cFileName);
+                LogMessage(logMsg);
+                
+                // Mostrar en consola solo el nombre
+                printf("Mod encontrado: %s\n", findData.cFileName);
+            }
+        } while (FindNextFileA(findHandle, &findData));
+        FindClose(findHandle);
+    }
+
+    return mods;
+}
+
+bool ValidateCubeExecutable(const char* exePath) {
+    if (!FileExists(exePath)) {
+        LogError("Cube.exe no encontrado");
+        return false;
+    }
+
+    WIN32_FILE_ATTRIBUTE_DATA fileAttr;
+    if (!GetFileAttributesExA(exePath, GetFileExInfoStandard, &fileAttr)) {
+        LogError("No se pudo acceder a Cube.exe");
+        return false;
+    }
+
+    const long EXPECTED_SIZE = 3885568;
+    const long SIZE_TOLERANCE = 100000;
+    
+    long actualSize = fileAttr.nFileSizeLow;
+    if (actualSize < EXPECTED_SIZE - SIZE_TOLERANCE || actualSize > EXPECTED_SIZE + SIZE_TOLERANCE) {
+        char msg[512];
+        sprintf_s(msg, sizeof(msg), 
+            "Versión incorrecta de Cube.exe\n\n"
+            "Tamaño esperado: ~%ld bytes\n"
+            "Tamaño actual: %ld bytes\n\n"
+            "Por favor, usa Cube World Alpha 0.1.1 exacta",
+            EXPECTED_SIZE, actualSize);
+        ShowWarning("Validación de Versión", msg);
+    }
+
+    LogMessage("Cube.exe validado correctamente");
+    return true;
 }
 
 // ============================================
-// FUNCIÓN PRINCIPAL
+// FUNCIÓN PRINCIPAL - OPTIMIZADA
 // ============================================
 
-int main()
-{
-    // Configurar locales y UTF-8
-    setlocale(LC_ALL, "es_ES.UTF-8");
-    SetConsoleCP(65001);
-    SetConsoleOutputCP(65001);
+int main(int argc, char** argv) {
+    // Limpiar log anterior
+    DeleteFileA(LOG_FILE);
+    
+    LogMessage("========================================");
+    LogMessage("Iniciando Cube World Mod Launcher v2.5");
+    LogMessage("========================================");
 
-    // Crear archivo de log
-    errno_t logErr = fopen_s(&logFile, "CubeWorldLauncher.log", "a");
-    if (logErr != 0) {
-        printf("ADVERTENCIA: No se pudo crear archivo de log\n");
-    }
-
+    // Mostrar encabezado
     printf("\n");
-    printf("╔════════════════════════════════════════╗\n");
-    printf("║  Cube World Mod Launcher - Alpha 0.1.1 ║\n");
-    printf("║           Versión Mejorada v2.0        ║\n");
-    printf("╚════════════════════════════════════════╝\n");
+    printf("========================================\n");
+    printf("Iniciando Cube World Mod Launcher v2.5\n");
+    printf("========================================\n\n");
+
+    const char* cubeExe = CUBE_EXECUTABLE;
+    const char* modDll = MODLOADER_DLL;
+
+    if (argc >= 2) {
+        cubeExe = argv[1];
+    }
+
+    // [1/5] Validar Cube.exe
+    printf("[1/5] Validando Cube.exe...\n");
+    if (!ValidateCubeExecutable(cubeExe)) {
+        return Bail(1, "Cube.exe no es la versión correcta (Alpha 0.1.1)");
+    }
+    printf("Cube.exe validado correctamente\n\n");
+
+    // [2/5] Crear directorio de Mods
+    printf("[2/5] Verificando directorio de Mods...\n");
+    if (!CreateModsDirectory()) {
+        return Bail(1, "No se pudo crear el directorio de Mods");
+    }
+    printf("Directorio de Mods listo\n\n");
+
+    // [3/5] Validar CallbackManager.dll
+    printf("[3/5] Buscando CallbackManager.dll...\n");
+    if (!FileExists(modDll)) {
+        return Bail(1, "CallbackManager.dll no encontrado en la carpeta principal");
+    }
+    printf("CallbackManager.dll encontrado\n\n");
+
+    // [4/5] Cargar mods
+    printf("[4/5] Cargando mods de la carpeta Mods...\n");
+    std::vector<std::string> mods = LoadModsFromDirectory();
     printf("\n");
 
-    LogMessage("===== INICIANDO LAUNCHER =====");
-
-    // [1/6] Verificar Cube.exe
-    printf("[1/6] Verificando Cube.exe...\n");
-    LogMessage("[1/6] Verificando Cube.exe");
+    // [5/5] Crear proceso
+    printf("[5/5] Iniciando Cubeworld...\n\n");
+    LogMessage("Creando proceso de Cube.exe en estado suspendido");
     
-    if (!FileExists(CUBE_EXECUTABLE)) {
+    Process process(cubeExe);
+
+    if (!process.Create()) {
         char msg[256];
-        sprintf_s(msg, sizeof(msg), 
-            "%s no encontrado.\n"
-            "Coloca este launcher en la misma carpeta que Cube.exe",
-            CUBE_EXECUTABLE);
-        ShowError("Archivo no encontrado", msg);
-        return Bail(1, "");
+        sprintf_s(msg, sizeof(msg), "No se pudo crear el proceso: %lu", GetLastError());
+        return Bail(1, msg);
     }
 
-    if (!ValidateCubeExecutable(CUBE_EXECUTABLE)) {
-        return Bail(1, "");
+    LogMessage("Proceso de Cube.exe creado correctamente");
+
+    // Inyectar CallbackManager.dll
+    printf("Inyectando CallbackManager.dll...\n");
+    if (!process.InjectDLL(modDll)) {
+        return Bail(1, "No se pudo inyectar CallbackManager.dll");
     }
-    printf("  [✓] Cube.exe validado correctamente\n\n");
+    LogMessage("CallbackManager.dll inyectado exitosamente");
 
-    // [2/6] Verificar CallbackManager.dll
-    printf("[2/6] Verificando CallbackManager.dll...\n");
-    LogMessage("[2/6] Verificando CallbackManager.dll");
-    
-    if (!FileExists(MODLOADER_DLL)) {
-        char msg[256];
-        sprintf_s(msg, sizeof(msg), 
-            "%s no encontrado.\n"
-            "Este archivo es obligatorio para el funcionamiento del launcher.",
-            MODLOADER_DLL);
-        ShowError("Archivo no encontrado", msg);
-        return Bail(1, "");
-    }
-    printf("  [✓] CallbackManager.dll encontrado\n\n");
-
-    // [3/6] Crear carpeta de mods
-    printf("[3/6] Preparando carpeta de mods...\n");
-    LogMessage("[3/6] Preparando carpeta de mods");
-    
-    if (!DirectoryExists(MOD_DIRECTORY)) {
-        if (CreateDirectoryA(MOD_DIRECTORY, NULL)) {
-            printf("  [✓] Carpeta '%s' creada\n\n", MOD_DIRECTORY);
-            LogMessage("Carpeta de mods creada");
-        } else {
-            ShowError("Error en directorio", "No se pudo crear la carpeta 'Mods'.");
-            return Bail(1, "");
-        }
-    } else {
-        printf("  [✓] Carpeta '%s' encontrada\n\n", MOD_DIRECTORY);
-    }
-
-    // [4/6] Crear proceso suspendido
-    printf("[4/6] Iniciando Cube.exe (suspendido)...\n");
-    LogMessage("[4/6] Iniciando Cube.exe");
-    
-    Process gameProcess(CUBE_EXECUTABLE);
-    
-    if (!gameProcess.Create()) {
-        char msg[256];
-        sprintf_s(msg, sizeof(msg), "Error al crear proceso: 0x%lX", GetLastError());
-        ShowError("Error de proceso", msg);
-        return Bail(1, "");
-    }
-    printf("  [✓] Cube.exe iniciado (suspendido)\n\n");
-
-    vector<string> loadedMods;
-    
-    // Agregar CallbackManager (obligatorio)
-    loadedMods.push_back(MODLOADER_DLL);
-
-    // [5/6] Buscar y cargar mods
-    printf("[5/6] Buscando mods compatibles con Alpha 0.1.1...\n");
-    LogMessage("[5/6] Buscando mods en carpeta Mods");
-    
-    HANDLE hFind;
-    WIN32_FIND_DATAA data;
-
-    hFind = FindFirstFileA(MOD_SEARCH_PATTERN, &data);
-    int modCount = 0;
-    
-    if (hFind != INVALID_HANDLE_VALUE) {
-        do {
-            // No volver a agregar CallbackManager
-            if (strcmp(data.cFileName, MODLOADER_DLL) != 0) {
-                string modPath = string(MOD_DIRECTORY) + "\\" + data.cFileName;
-                loadedMods.push_back(modPath);
-                printf("  • Mod encontrado: %s\n", data.cFileName);
-                LogMessage(("Mod encontrado: " + string(data.cFileName)).c_str());
-                modCount++;
+    // Inyectar mods
+    if (!mods.empty()) {
+        printf("Inyectando mods...\n");
+        int successCount = 0;
+        
+        for (const auto& mod : mods) {
+            if (process.InjectDLL(mod)) {
+                successCount++;
+            } else {
+                char msg[512];
+                sprintf_s(msg, sizeof(msg), "Advertencia: No se pudo inyectar %s", mod.c_str());
+                LogError(msg);
             }
-        } while (FindNextFileA(hFind, &data));
-        FindClose(hFind);
-    }
-
-    if (modCount == 0) {
-        printf("  (No hay mods adicionales en la carpeta)\n");
-        LogMessage("No se encontraron mods adicionales");
-    }
-    printf("\n");
-
-    // [6/6] Inyectar DLLs
-    printf("[6/6] Inyectando DLLs en proceso...\n");
-    LogMessage("[6/6] Inyectando DLLs");
-    
-    int successCount = 0;
-    int totalDLLs = loadedMods.size();
-
-    for (const string& dllName : loadedMods) {
-        if (gameProcess.InjectDLL(dllName)) {
-            successCount++;
-        } else {
-            printf("    [✗] Error al inyectar: %s\n", dllName.c_str());
-            LogMessage(("ERROR al inyectar: " + dllName).c_str());
         }
+        
+        LogMessage("Mods inyectados exitosamente");
     }
 
-    printf("\n");
+    printf("Inyeccion exitosa\n\n");
 
-    // Pequeña pausa para que la inyección se estabilice
-    printf("Esperando estabilización de inyección (250ms)...\n");
-    Sleep(250);
+    // Dar tiempo para que se cargue
+    Sleep(1000);
 
     // Reanudar proceso
-    printf("Reanudando proceso principal...\n\n");
-    gameProcess.Resume();
-    
-    printf("╔════════════════════════════════════════╗\n");
-    printf("║         Información de Inyección       ║\n");
-    printf("╠════════════════════════════════════════╣\n");
-    printf("║  DLLs Inyectados: %d/%d                  ║\n", successCount, totalDLLs);
-    printf("║  Estado: %s                      ║\n", (successCount == totalDLLs) ? "✓ OK" : "⚠ PARCIAL");
-    printf("╚════════════════════════════════════════╝\n");
-    printf("\n");
+    process.Resume();
 
-    if (successCount < totalDLLs) {
-        ShowWarning("Advertencia", 
-            "Algunos mods no se inyectaron correctamente.\n"
-            "El juego puede no funcionar como se espera.");
-    }
+    LogMessage("========================================");
+    LogMessage("Cube World iniciado correctamente");
+    LogMessage("========================================");
 
-    printf("Esperando a que Cube World se cierre...\n");
-    printf("(Esta ventana se cerrará cuando cierres el juego)\n\n");
+    // Esperar a que termine el juego
+    process.Wait();
 
-    LogMessage("Esperando proceso...");
-
-    // Esperar a que el proceso termine
-    gameProcess.Wait();
-
-    printf("\n");
-    printf("╔════════════════════════════════════════╗\n");
-    printf("║     Cube World ha sido cerrado ✓       ║\n");
-    printf("╚════════════════════════════════════════╝\n");
-    printf("\n");
-
-    LogMessage("===== LAUNCHER FINALIZADO =====");
-
-    PrintLoadedMods(loadedMods);
-
-    printf("Presiona ENTER para cerrar...\n");
-    cin.ignore();
-
-    if (logFile) {
-        fclose(logFile);
-    }
+    LogMessage("========================================");
+    LogMessage("Cube World finalizado");
+    LogMessage("========================================");
 
     return 0;
 }

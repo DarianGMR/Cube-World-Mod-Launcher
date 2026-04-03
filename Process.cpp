@@ -33,11 +33,12 @@ bool Process::Create()
         &si,
         &pi
     )) {
-        fprintf(stderr, "ERROR: No se pudo crear proceso de %s\n", executablePath.c_str());
+        DWORD error = GetLastError();
+        fprintf(stderr, "ERROR: No se pudo crear proceso de %s (Error: %lu)\n", 
+                executablePath.c_str(), error);
         return false;
     }
 
-    printf("  Proceso creado exitosamente: PID=%lu\n", pi.dwProcessId);
     return true;
 }
 
@@ -60,7 +61,7 @@ bool Process::InjectDLL(const std::string& dllName)
     LPVOID load_library = (LPVOID)GetProcAddress(kernel32, "LoadLibraryA");
     
     if (load_library == NULL) {
-        fprintf(stderr, "ERROR: No se pudo obtener dirección de LoadLibraryA\n");
+        fprintf(stderr, "ERROR: No se pudo obtener direccion de LoadLibraryA\n");
         return false;
     }
 
@@ -117,8 +118,13 @@ bool Process::InjectDLL(const std::string& dllName)
         return false;
     }
 
+    // Esperar a que el thread termine
+    DWORD waitResult = WaitForSingleObject(thread, 5000);
+    if (waitResult == WAIT_TIMEOUT) {
+        fprintf(stderr, "WARNING: Timeout esperando inyeccion de %s\n", dllName.c_str());
+    }
+
     injectedThreads.push_back(thread);
-    printf("    [✓] %s inyectado en proceso remoto\n", dllName.c_str());
 
     return true;
 }
@@ -128,7 +134,6 @@ void Process::Resume()
     if (pi.hThread != NULL) {
         DWORD result = ResumeThread(pi.hThread);
         if (result != static_cast<DWORD>(-1)) {
-            printf("  Proceso reanudado exitosamente\n");
         } else {
             fprintf(stderr, "WARNING: No se pudo reanudar el proceso\n");
         }
@@ -160,6 +165,17 @@ bool Process::IsRunning() const
     return exitCode == STILL_ACTIVE;
 }
 
+void Process::Terminate(UINT exitCode)
+{
+    if (pi.hProcess != NULL && IsRunning()) {
+        if (TerminateProcess(pi.hProcess, exitCode)) {
+            printf("  Proceso terminado\n");
+        } else {
+            fprintf(stderr, "WARNING: No se pudo terminar el proceso\n");
+        }
+    }
+}
+
 void Process::WriteJMP(BYTE* location, BYTE* newFunction)
 {
     assert(location != nullptr);
@@ -167,7 +183,7 @@ void Process::WriteJMP(BYTE* location, BYTE* newFunction)
 
     DWORD dwOldProtection;
     if (!VirtualProtect(location, 5, PAGE_EXECUTE_READWRITE, &dwOldProtection)) {
-        fprintf(stderr, "ERROR: No se pudo cambiar protección de memoria\n");
+        fprintf(stderr, "ERROR: No se pudo cambiar proteccion de memoria\n");
         return;
     }
     
@@ -178,7 +194,7 @@ void Process::WriteJMP(BYTE* location, BYTE* newFunction)
     
     DWORD dwOldProtectionRestore;
     if (!VirtualProtect(location, 5, dwOldProtection, &dwOldProtectionRestore)) {
-        fprintf(stderr, "ERROR: No se pudo restaurar protección de memoria\n");
+        fprintf(stderr, "ERROR: No se pudo restaurar proteccion de memoria\n");
     }
 }
 

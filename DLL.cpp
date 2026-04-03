@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cassert>
+#include <windows.h>
 
 DLL::DLL(std::string fileName) 
     : fileName(std::move(fileName)), 
@@ -19,18 +20,21 @@ HMODULE DLL::Load() {
 
     this->handle = LoadLibraryA(this->fileName.c_str());
     if (!this->handle) {
+        DWORD error = GetLastError();
         char errorMsg[512];
         sprintf_s(errorMsg, sizeof(errorMsg), 
-            "No se pudo cargar %s\nError: %ld\n\n"
-            "Asegúrate de que:\n"
+            "No se pudo cargar %s\nError: %lu\n\n"
+            "Asegurate de que:\n"
             "1. El archivo está en la carpeta Mods\n"
             "2. El formato DLL es compatible\n"
             "3. Todas las dependencias están disponibles",
-            this->fileName.c_str(), GetLastError());
+            this->fileName.c_str(), error);
+        
         MessageBoxA(NULL, errorMsg, "Error al cargar mod", MB_OK | MB_ICONERROR);
-        fprintf(stderr, "ERROR: No se pudo cargar %s: %ld\n", this->fileName.c_str(), GetLastError());
+        fprintf(stderr, "ERROR: No se pudo cargar %s: %lu\n", this->fileName.c_str(), error);
         return nullptr;
     }
+    
     printf("  Mod cargado exitosamente: %s\n", this->fileName.c_str());
     return this->handle;
 }
@@ -38,7 +42,8 @@ HMODULE DLL::Load() {
 DLL::~DLL() {
     if (this->handle != nullptr) {
         if (!FreeLibrary(this->handle)) {
-            fprintf(stderr, "WARNING: No se pudo liberar DLL: %s\n", this->fileName.c_str());
+            fprintf(stderr, "WARNING: No se pudo liberar DLL: %s (Error: %lu)\n", 
+                    this->fileName.c_str(), GetLastError());
         }
         this->handle = nullptr;
     }

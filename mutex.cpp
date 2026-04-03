@@ -13,3 +13,7 @@ void mutex::lock() {
 void mutex::unlock() {
     LeaveCriticalSection(&cs);
 }
+
+mutex::~mutex() {
+    DeleteCriticalSection(&cs);
+}

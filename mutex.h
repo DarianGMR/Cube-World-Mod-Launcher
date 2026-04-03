@@ -7,10 +7,12 @@
 class mutex {
 private:
     CRITICAL_SECTION cs;
+    
 public:
     mutex();
     void lock();
     void unlock();
+    virtual ~mutex();
 };
 
 #endif // GCC_MUTEX_H

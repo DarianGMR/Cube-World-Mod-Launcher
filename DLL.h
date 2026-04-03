@@ -6,6 +6,7 @@
 #include <string>
 #include "GenericMod.h"
 
+// Clase para gestionar carga de DLLs de mods
 class DLL
 {
 public:
@@ -23,6 +24,7 @@ public:
     // Constructor y destructor
     DLL(std::string fileName);
     HMODULE Load();
+    bool IsLoaded() const { return handle != nullptr; }
     virtual ~DLL();
 
 private:

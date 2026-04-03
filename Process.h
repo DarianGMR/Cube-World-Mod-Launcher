@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <vector>
 
+// Clase para gestionar procesos de Cube World
 class Process
 {
 public:
@@ -27,9 +28,13 @@ public:
     // Obtener handles del proceso
     HANDLE GetProcessHandle() const { return pi.hProcess; }
     HANDLE GetThreadHandle() const { return pi.hThread; }
+    DWORD GetProcessID() const { return pi.dwProcessId; }
     
     // Verificar si el proceso está corriendo
     bool IsRunning() const;
+    
+    // Forzar terminar el proceso
+    void Terminate(UINT exitCode = 0);
 
 private:
     std::string executablePath;

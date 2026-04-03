@@ -32,11 +32,8 @@ target_link_libraries(CubeWorldModLauncher
     kernel32
 )
 
-# Opciones de compilación para MSVC - CERO WARNINGS
+# Opciones de compilación para MSVC
 if(MSVC)
-    # /W4 = Máximo nivel de warnings
-    # /WX = Tratar warnings como errores (OPCIONAL - descomentar si quieres ser estricto)
-    # /permissive- = Cumplir estándares C++
     target_compile_options(CubeWorldModLauncher PRIVATE 
         /W4 
         /utf-8
@@ -66,6 +63,7 @@ set_target_properties(CubeWorldModLauncher PROPERTIES
 # Mensaje de éxito
 message(STATUS "========================================")
 message(STATUS "Configuración completada exitosamente")
+message(STATUS "Proyecto: Cube World Mod Launcher v2.5")
 message(STATUS "Ejecutable: bin/CubeWorldModLauncher.exe")
 message(STATUS "Modo: Release")
 message(STATUS "Standard C++: 17")
